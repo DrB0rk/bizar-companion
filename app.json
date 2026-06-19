@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Bizar Companion",
+    "slug": "bizar-companion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.bizar.companion",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png"
+      }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}
