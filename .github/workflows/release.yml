@@ -55,6 +55,26 @@ jobs:
         env:
           CI: "1"
 
+      - name: Add missing splashscreen_background color
+        run: |
+          set -euo pipefail
+          COLORS="android/app/src/main/res/values/colors.xml"
+          if grep -q 'splashscreen_background' "$COLORS"; then
+            echo "splashscreen_background already present"
+            exit 0
+          fi
+          printf '%s\n' \
+            "import re, sys" \
+            "p = 'android/app/src/main/res/values/colors.xml'" \
+            "c = open(p).read()" \
+            "new_c = re.sub(r'(</resources>)', r'    <color name=\"splashscreen_background\">#FFFFFF</color>\\n\\1', c)" \
+            "if new_c == c:" \
+            "    print('WARNING: could not find </resources> tag to patch', file=sys.stderr)" \
+            "    sys.exit(1)" \
+            "open(p, 'w').write(new_c)" \
+            "print('Added splashscreen_background to colors.xml')" \
+            > /tmp/patch_colors.py
+          python3 /tmp/patch_colors.py
 
       - name: Patch AndroidManifest.xml for cleartext (LAN dashboard URLs)
         run: |
