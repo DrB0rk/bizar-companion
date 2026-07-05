@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,52 +14,127 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/colors';
 import { usePairing } from '../store/pairing';
 import { apiGet, apiPost } from '../api/client';
-import type { ChatMessage } from '../api/types';
+import { useWsEvent } from '../hooks/useWsEvent';
+import type { ChatMessage, ChatListResponse, ChatSession } from '../api/types';
+
+const MAX_MESSAGES = 200;
 
 export default function ChatScreen() {
   const theme = useTheme();
-  const { pairing } = usePairing();
+  const { isPaired } = usePairing();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [streamingId, setStreamingId] = useState<string | null>(null);
+
+  // Streaming accumulation: messageId -> accumulated text
+  const streamingText = useRef<Record<string, string>>({});
 
   const load = useCallback(async () => {
+    if (!isPaired) return;
     try {
       setError(null);
-      const data = await apiGet<ChatMessage[] | { messages?: ChatMessage[] }>(
-        '/api/chat?limit=50',
-      );
-      setMessages(Array.isArray(data) ? data : data.messages || []);
+      const data = await apiGet<ChatListResponse>('/api/chat?limit=50');
+      setMessages((data.messages ?? []).slice(-MAX_MESSAGES));
+      setSessions(data.sessions ?? []);
     } catch (err: any) {
       setError(err?.message || 'Failed to load chat');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isPaired]);
 
   useEffect(() => {
-    if (!pairing) return;
     load();
-  }, [pairing, load]);
+  }, [load]);
+
+  // WS subscriptions
+  useWsEvent('chat:message', (msg) => {
+    const incoming = msg.data.message;
+    setMessages((prev) => {
+      // Dedup by id if present
+      if (incoming.id && prev.some((m) => m.id === incoming.id)) return prev;
+      return [...prev, incoming].slice(-MAX_MESSAGES);
+    });
+  });
+
+  useWsEvent('chat:delta', (msg) => {
+    const { messageId, delta } = msg.data;
+    streamingText.current[messageId] = (streamingText.current[messageId] ?? '') + delta;
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === messageId);
+      if (idx === -1) {
+        // Create a provisional assistant message
+        return [
+          ...prev,
+          { id: messageId, role: 'assistant', content: streamingText.current[messageId] },
+        ].slice(-MAX_MESSAGES);
+      }
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], content: streamingText.current[messageId] };
+      return updated;
+    });
+  });
+
+  useWsEvent('chat:error', (msg) => {
+    setError(msg.data.error);
+    setSending(false);
+  });
+
+  useWsEvent('chat:session:create', () => load());
 
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
     setSending(true);
+    setError(null);
+    setInput('');
+
+    // Optimistically append user message
+    const tempId = `temp-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: tempId, role: 'user', content: text }].slice(-MAX_MESSAGES));
+
     try {
       await apiPost('/api/chat', { message: text });
-      setInput('');
-      await load();
+      // Let WS deltas drive the assistant response; reload after a short window
     } catch (err: any) {
       setError(err?.message || 'Send failed');
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } finally {
       setSending(false);
     }
   };
 
-  if (!pairing) return null;
+  if (!isPaired) return null;
+
+  const renderItem = ({ item }: { item: ChatMessage }) => {
+    const isUser = item.role === 'user';
+    return (
+      <View
+        style={[
+          styles.bubble,
+          {
+            backgroundColor: isUser ? theme.userBubble : theme.agentBubble,
+            borderColor: isUser ? theme.userBubble : theme.border,
+            alignSelf: isUser ? 'flex-end' : 'flex-start',
+          },
+        ]}
+      >
+        {item.agent && !isUser && (
+          <Text style={[styles.agentLabel, { color: theme.accent }]}>{item.agent}</Text>
+        )}
+        <Text style={[styles.bubbleText, { color: theme.text }]}>{item.content}</Text>
+        {item.ts && (
+          <Text style={[styles.bubbleTs, { color: theme.textMuted }]}>
+            {new Date(item.ts).toLocaleTimeString()}
+          </Text>
+        )}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top']}>
@@ -73,42 +148,26 @@ export default function ChatScreen() {
             <ActivityIndicator color={theme.accent} />
           </View>
         ) : (
-          <FlatList
-            data={messages}
-            keyExtractor={(_item, i) => String(i)}
-            renderItem={({ item }) => {
-              const isUser = item.role === 'user';
-              return (
-                <View
-                  style={[
-                    styles.bubble,
-                    {
-                      backgroundColor: isUser ? theme.userBubble : theme.agentBubble,
-                      borderColor: isUser ? theme.userBubble : theme.border,
-                      alignSelf: isUser ? 'flex-end' : 'flex-start',
-                    },
-                  ]}
-                >
-                  <Text style={[styles.bubbleText, { color: theme.text }]}>
-                    {item.content}
-                  </Text>
-                  {item.ts && (
-                    <Text style={[styles.bubbleTs, { color: theme.textMuted }]}>
-                      {new Date(item.ts).toLocaleTimeString()}
-                    </Text>
-                  )}
-                </View>
-              );
-            }}
-            contentContainerStyle={{ padding: 16, flexGrow: 1 }}
-            ListEmptyComponent={
-              <View style={styles.center}>
-                <Text style={{ color: theme.textMuted }}>
-                  {error || 'No messages yet. Say something to the agent.'}
-                </Text>
+          <>
+            {error && (
+              <View style={[styles.errorBanner, { backgroundColor: theme.error }]}>
+                <Text style={styles.errorBannerText}>{error}</Text>
               </View>
-            }
-          />
+            )}
+            <FlatList
+              data={messages}
+              keyExtractor={(_item, i) => String(i)}
+              renderItem={renderItem}
+              contentContainerStyle={{ padding: 16, flexGrow: 1 }}
+              ListEmptyComponent={
+                <View style={styles.center}>
+                  <Text style={{ color: theme.textMuted }}>
+                    Say something to the agent.
+                  </Text>
+                </View>
+              }
+            />
+          </>
         )}
         <View style={[styles.inputRow, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
           <TextInput
@@ -143,6 +202,7 @@ const styles = StyleSheet.create({
   bubble: { padding: 12, borderRadius: 14, marginVertical: 4, maxWidth: '85%', borderWidth: 1 },
   bubbleText: { fontSize: 15, lineHeight: 21 },
   bubbleTs: { fontSize: 11, marginTop: 6 },
+  agentLabel: { fontSize: 11, fontWeight: '700', marginBottom: 4 },
   inputRow: { flexDirection: 'row', padding: 8, gap: 8, borderTopWidth: 1, alignItems: 'flex-end' },
   input: {
     flex: 1,
@@ -160,4 +220,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendBtnText: { color: 'white', fontSize: 20, fontWeight: '700' },
+  errorBanner: { padding: 8, alignItems: 'center' },
+  errorBannerText: { color: '#fff', fontSize: 13 },
 });

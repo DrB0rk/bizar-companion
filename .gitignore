@@ -1,11 +1,18 @@
 node_modules/
 .expo/
 dist/
-android/build/
-ios/build/
+android/
+ios/
+.gradle/
+build/
+local.properties
+*.keystore
+*.jks
 *.log
 .DS_Store
 .env*
-eas.json
 *.orig.*
 web-build/
+# Note: eas.json is intentionally NOT ignored — it is committed so EAS Build
+# config can be reviewed in PRs and pinned in git history. Remove this
+# comment if you want it local-only.

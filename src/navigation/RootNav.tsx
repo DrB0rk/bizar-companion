@@ -1,19 +1,28 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Activity, MessageSquare, CheckSquare, Settings, MoreHorizontal } from 'lucide-react-native';
+import { Alert } from 'react-native';
 import { usePairing } from '../store/pairing';
-import { setPairing } from '../api/client';
+import { setPairing, onUnauthorized } from '../api/client';
+import { wsConnect, wsDisconnect } from '../api/ws';
 import { useTheme } from '../theme/colors';
 import PairScreen from '../screens/PairScreen';
+import SecretEntryScreen from '../screens/SecretEntryScreen';
 import ActivityScreen from '../screens/ActivityScreen';
 import ChatScreen from '../screens/ChatScreen';
 import TasksScreen from '../screens/TasksScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import MoreScreen from '../screens/MoreScreen';
 
-const Stack = createNativeStackNavigator();
+export type RootStackParamList = {
+  Pair: undefined;
+  SecretEntry: { url: string };
+  Main: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
 function MainTabs() {
@@ -59,13 +68,37 @@ function MainTabs() {
 }
 
 export function RootNav() {
-  const { isPaired, loading, pairing } = usePairing();
+  const { url, secret, loading, clear } = usePairing();
   const theme = useTheme();
 
-  // Sync the api client's pairing snapshot whenever the provider value changes.
+  // Sync api client and WS singleton whenever pairing changes
   useEffect(() => {
-    setPairing(pairing?.url ?? null, pairing?.token ?? null);
-  }, [pairing]);
+    setPairing(url, secret);
+    if (url && secret) {
+      wsConnect(url, secret);
+    } else {
+      wsDisconnect();
+    }
+  }, [url, secret]);
+
+  // Register global 401 handler
+  useEffect(() => {
+    const unsub = onUnauthorized(() => {
+      Alert.alert(
+        'Dashboard token rejected',
+        'Please re-pair with the dashboard.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              clear();
+            },
+          },
+        ],
+      );
+    });
+    return unsub;
+  }, [clear]);
 
   if (loading) return null;
 
@@ -86,9 +119,14 @@ export function RootNav() {
   return (
     <NavigationContainer theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!isPaired ? (
+        {!url ? (
+          // No URL at all — show Pair screen
           <Stack.Screen name="Pair" component={PairScreen} />
+        ) : !secret ? (
+          // URL set, secret not yet — show SecretEntry screen
+          <Stack.Screen name="SecretEntry" component={SecretEntryScreen} initialParams={{ url }} />
         ) : (
+          // Both set — show Main tabs
           <Stack.Screen name="Main" component={MainTabs} />
         )}
       </Stack.Navigator>

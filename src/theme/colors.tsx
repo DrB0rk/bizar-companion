@@ -13,6 +13,8 @@ export type Theme = {
   error: string;
   userBubble: string;
   agentBubble: string;
+  progressTrack: string;
+  danger: string;
 };
 
 export const darkTheme: Theme = {
@@ -28,6 +30,8 @@ export const darkTheme: Theme = {
   error: '#f85149',
   userBubble: '#8b5cf6',
   agentBubble: '#161b22',
+  progressTrack: '#21262d',
+  danger: '#f85149',
 };
 
 const Ctx = createContext<Theme>(darkTheme);
