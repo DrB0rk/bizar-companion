@@ -55,11 +55,6 @@ jobs:
         env:
           CI: "1"
 
-      - name: Create splashscreen_background color resource
-        run: |
-          mkdir -p android/app/src/main/res/values
-          echo "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHJlc291cmNlcz4KICAgIDxjb2xvciBuYW1lPSJzcGxhc2hzY3JlZW5fYmFja2dyb3VuZCI+IzAwMDAwPC9jb2xvcj4KPC9yZXNvdXJjZXM+Cg==" | base64 -d > android/app/src/main/res/values/colors.xml
-          echo "Created splashscreen_background color"
 
       - name: Patch AndroidManifest.xml for cleartext (LAN dashboard URLs)
         run: |
