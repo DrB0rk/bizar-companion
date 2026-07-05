@@ -41,15 +41,14 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v3
         with:
           api-level: 34
           build-tools: 34.0.0
           ndk: false
-          cache-modules: cache
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Generate Android project (expo prebuild)
         run: npx --yes expo prebuild --platform android --non-interactive --clean
