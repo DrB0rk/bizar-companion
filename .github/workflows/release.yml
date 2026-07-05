@@ -55,6 +55,19 @@ jobs:
         env:
           CI: "1"
 
+      - name: Create splashscreen_background color resource
+        run: |
+          mkdir -p android/app/src/main/res/values
+          python3 -c "
+content = '''<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<resources>
+    <color name=\"splashscreen_background\">#FFFFFF</color>
+</resources>
+'''
+open('android/app/src/main/res/values/colors.xml', 'w').write(content)
+print('Created splashscreen_background color')
+"
+
       - name: Patch AndroidManifest.xml for cleartext (LAN dashboard URLs)
         run: |
           set -euo pipefail
