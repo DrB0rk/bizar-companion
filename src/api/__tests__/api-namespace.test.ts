@@ -7,17 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setPairing, api } from '../client';
-
-const mockJson = (body: unknown): Response => {
-  return {
-    ok: true,
-    status: 200,
-    statusText: 'OK',
-    headers: new Headers({ 'content-type': 'application/json' }),
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-  } as Response;
-};
+import { mockJson, mockResponse, mockStatus } from './__helpers__/mockResponse.js';
 
 describe('api namespace', () => {
   beforeEach(() => {
@@ -94,6 +84,14 @@ describe('api namespace', () => {
     expect(url).toBe('https://api.test/api/memory/search?q=graph%20query');
   });
 
+  it('api.pairVerify → GET /api/pair/verify with Bearer token', async () => {
+    await api.pairVerify('https://pair.test', 'tok-123');
+    const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('https://pair.test/api/pair/verify');
+    expect(init.headers.Authorization).toBe('Bearer tok-123');
+    expect(init.method).toBe('GET');
+  });
+
   it('api.voice.upload → POST with audio base64', async () => {
     await api.voice.upload('base64data', { source: 'mobile' });
     const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -104,3 +102,24 @@ describe('api namespace', () => {
     });
   });
 });
+
+  it('api.notifications.dismiss → DELETE /api/notifications/:id (returns void)', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockReset().mockResolvedValue(mockResponse(204));
+    const r = await api.notifications.dismiss('n1');
+    const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('https://api.test/api/notifications/n1');
+    expect(init.method).toBe('DELETE');
+    expect(r).toBeUndefined();
+  });
+
+  it('api.background.steer → POST with message (returns void)', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockReset().mockResolvedValue(mockResponse(204));
+    const r = await api.background.steer('bg1', 'redirect now');
+    expect(r).toBeUndefined();
+  });
+
+  it('api.tasks.start → POST (returns void)', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockReset().mockResolvedValue(mockResponse(204));
+    const r = await api.tasks.start('t1');
+    expect(r).toBeUndefined();
+  });

@@ -79,8 +79,8 @@ export default function SecretEntryScreen() {
 
       // Step 4: Navigate to Main (RootNav will detect isPaired = true and switch)
       navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
-    } catch (err: any) {
-      setError(err?.message || 'Connection failed. Please try again.');
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : String(err)) || 'Connection failed. Please try again.');
       setLoading(false);
     }
   };

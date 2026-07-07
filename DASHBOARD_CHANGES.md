@@ -3,7 +3,7 @@
 
 **Target repo:** `~/Projects/BizarHarness` (the `@polderlabs/bizar` source)
 **Audience:** whoever is touching the BizarHarness server, dashboards, or auth
-**Status (2026-07-07, v1.2.0-beta.1):** The companion now ships with a
+**Status (2026-07-07, v1.2.0-beta.2):** The companion now ships with a
 typed `api.*` namespace that talks to existing dashboard endpoints. The
 **pair-token-as-bearer** change (Critical §1) is still pending in the
 dashboard — until that lands, the companion flow is:
@@ -18,7 +18,7 @@ the dashboard would need to do to allow the QR-only flow (no manual secret
 paste). The companion no longer *requires* it, but adopting §1 (pair token
 → bearer) would let us drop the manual paste step.
 
-**Companion version this targets:** v1.2.0-beta.1
+**Companion version this targets:** v1.2.0-beta.2
 **Minimum dashboard version:** 5.6.0+ (enforced via `app.json:extra.bizar.minSupportedDashboardVersion`)
 
 

@@ -4,8 +4,7 @@ import { ChevronRight, Book, Github, Bug } from 'lucide-react-native';
 import { useTheme } from '../theme/colors';
 import { usePairing } from '../store/pairing';
 import { Card } from '../components/Card';
-
-const VERSION = '1.2.0-beta.1';
+import { APP_VERSION } from '../config/version';
 
 const LINKS: Array<{ title: string; desc: string; url: string; icon: 'book' | 'code' | 'bug' }> = [
   {
@@ -56,7 +55,7 @@ export default function MoreScreen() {
       <View style={{ padding: 16 }}>
         <Card title="About">
           <Text style={[styles.line, { color: theme.text }]}>
-            Build: <Text style={{ color: theme.accent }}>{VERSION}</Text>
+            Build: <Text style={{ color: theme.accent }}>{APP_VERSION}</Text>
           </Text>
           {url && (
             <Text style={[styles.line, { color: theme.text }]}>

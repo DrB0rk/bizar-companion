@@ -17,12 +17,13 @@ import { api } from '../api/client';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { onWsStateChange, getWsState, WsState } from '../api/ws';
+import { useMinDashboardVersion } from '../hooks/useMinDashboardVersion';
+import { APP_VERSION } from '../config/version';
 import type { AuthStatus } from '../api/types';
-
-const VERSION = '1.2.0-beta.1';
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const minDashboardVersion = useMinDashboardVersion();
   const { url, secret, pairedAt, deviceName, dashboardVersion, setDashboardVersion, clear } = usePairing();
   const [testing, setTesting] = useState(false);
   const [reachable, setReachable] = useState<boolean | null>(null);
@@ -186,13 +187,13 @@ export default function SettingsScreen() {
         </Card>
 
         <Card title="About">
-          <Info label="Build" value={VERSION} />
-          <Info label="Min dashboard" value="5.6.0" />
+          <Info label="Build" value={APP_VERSION} />
+          <Info label="Min dashboard" value={minDashboardVersion} />
         </Card>
 
         <View style={{ marginTop: 12 }}>
           <Text style={[styles.footer, { color: theme.textMuted }]}>
-            v1.2.0-beta.1 — Agent-browser + Notifications + Background tabs
+            {APP_VERSION} — typed API + Notifications + Background tabs
           </Text>
         </View>
       </ScrollView>

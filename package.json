@@ -1,6 +1,6 @@
 {
   "name": "bizar-companion",
-  "version": "1.2.0-beta.1",
+  "version": "1.2.0-beta.2",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",

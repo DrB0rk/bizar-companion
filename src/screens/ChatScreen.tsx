@@ -40,8 +40,8 @@ export default function ChatScreen() {
       const data = await api.chat.list();
       setMessages((data.messages ?? []).slice(-MAX_MESSAGES));
       setSessions(data.sessions ?? []);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load chat');
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : String(err)) || 'Failed to load chat');
     } finally {
       setLoading(false);
     }
@@ -100,8 +100,8 @@ export default function ChatScreen() {
     try {
       await api.chat.send(text);
       // Let WS deltas drive the assistant response; reload after a short window
-    } catch (err: any) {
-      setError(err?.message || 'Send failed');
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : String(err)) || 'Send failed');
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } finally {
       setSending(false);

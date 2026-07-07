@@ -4,7 +4,7 @@ Android app for the Bizar dashboard.
 
 ## Status
 
-**v1.2.0-beta.1** — beta. Requires Bizar dashboard **5.6.0 or later** (enforced at startup via `expo.extra.bizar.minSupportedDashboardVersion`).
+**v1.2.0-beta.2** — beta. Requires Bizar dashboard **5.6.0 or later** (enforced at startup via `expo.extra.bizar.minSupportedDashboardVersion`).
 
 ## What it does
 
@@ -38,8 +38,8 @@ npx expo start --android   # dev
 Local `gradle` builds are **not supported on this machine** (no Android SDK / JDK 17 / `eas` available). The recommended path is the GitHub Actions release workflow — push a tag and the APK is built and released:
 
 ```bash
-git tag v1.2.0-beta.1
-git push origin v1.2.0-beta.1
+git tag v1.2.0-beta.2
+git push origin v1.2.0-beta.2
 ```
 
 For local builds on a machine that has the Android SDK + JDK 17 installed:
@@ -110,21 +110,29 @@ Tests cover:
 
 ```
 src/
-├── App.tsx                 # Top-level provider stack
-├── api/
-│   ├── client.ts          # HTTP client + typed api.* namespace
-│   ├── ws.ts              # WebSocket singleton
-│   ├── types.ts           # Shared API response types
-│   └── __tests__/         # vitest tests
-├── components/            # Reusable UI (Card, Button, TaskCard)
-├── hooks/                 # React hooks (useWsEvent, useWsSnapshot)
-├── navigation/            # RootNav, tab + stack navigators
-├── screens/               # One file per screen
-├── store/                 # PairingProvider context
-└── theme/                 # Dark-theme colors
+├── App.tsx                          # Top-level provider stack
+├── api/                             # Networking layer
+│   ├── client.ts                   # HTTP client + typed api.* namespace
+│   ├── ws.ts                       # WebSocket singleton + WsConnectionState
+│   ├── types.ts                    # Shared API response types
+│   └── __tests__/                  # HTTP / WS / api-namespace tests
+│       └── __helpers__/mockResponse.ts
+├── components/                     # Reusable UI (Card, Button, TaskCard)
+├── config/                         # Build-time constants
+│   └── version.ts                  # APP_VERSION — single source of truth
+├── hooks/                          # React hooks
+│   ├── useWsEvent.ts               # Subscribe to a single WsEvent type
+│   ├── useWsSnapshot.ts            # Live WsSnapshot from WebSocket
+│   ├── useMinDashboardVersion.ts   # Read minSupportedDashboardVersion from app.json
+│   └── __tests__/                  # Hook tests
+├── navigation/                     # RootNav, tab + stack navigators
+├── screens/                        # One file per screen
+├── store/                          # PairingProvider context
+└── theme/                          # Dark-theme colors
 ```
 
 ## Changelog
 
-- **v1.2.0-beta.1** (this version) — Notifications + Background agents tabs, typed API namespace, retry/abort/network-state plumbing, 31 unit tests
+- **v1.2.0-beta.2** (this version) — DRY cleanup (single APP_VERSION), `useMinDashboardVersion` hook, `err: unknown` standardization, void return types for 204 endpoints, 39 unit tests
+- **v1.2.0-beta.1** — Notifications + Background agents tabs, typed API namespace, retry/abort/network-state plumbing, 31 unit tests
 - **v1.1.0-beta.1** — Initial beta with Activity, Chat, Tasks, Settings

@@ -48,8 +48,8 @@ export default function TasksScreen() {
       const list = Array.isArray(data) ? data : data.tasks ?? [];
       // Sort by status order
       setTasks(list.sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)));
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load tasks');
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : String(err)) || 'Failed to load tasks');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -122,8 +122,8 @@ export default function TasksScreen() {
       await api.projects.activate(projectId);
       setActiveProjectId(projectId);
       await loadTasks();
-    } catch (err: any) {
-      setError(err?.message || 'Failed to switch project');
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : String(err)) || 'Failed to switch project');
     } finally {
       setActivating(null);
     }

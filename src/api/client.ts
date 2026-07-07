@@ -247,26 +247,30 @@ export const api = {
   tasks: {
     list: (opts?: RequestOptions) => apiGet<Task[] | { tasks?: Task[] }>('/api/tasks', opts),
     get: (id: string, opts?: RequestOptions) => apiGet<Task>(`/api/tasks/${id}`, opts),
-    start: (id: string, opts?: RequestOptions) => apiPost<{ ok: true }>(`/api/tasks/${id}/start`, undefined, opts),
+    start: (id: string, opts?: RequestOptions) => apiPost<void>(`/api/tasks/${id}/start`, undefined, opts),
     setStatus: (id: string, status: string, opts?: RequestOptions) =>
-      apiPatch<{ ok: true }>(`/api/tasks/${id}/status`, { status }, opts),
-    archive: (id: string, opts?: RequestOptions) => apiPost<{ ok: true }>(`/api/tasks/${id}/archive`, undefined, opts),
+      apiPatch<void>(`/api/tasks/${id}/status`, { status }, opts),
+    archive: (id: string, opts?: RequestOptions) => apiPost<void>(`/api/tasks/${id}/archive`, undefined, opts),
     progress: (id: string, progress: number, step?: string, opts?: RequestOptions) =>
-      apiPost<{ ok: true }>(`/api/tasks/${id}/progress`, { progress, step }, opts),
+      apiPost<void>(`/api/tasks/${id}/progress`, { progress, step }, opts),
   },
 
   projects: {
     list: (opts?: RequestOptions) => apiGet<ProjectListResponse>('/api/projects', opts),
     activate: (id: string, opts?: RequestOptions) =>
-      apiPost<{ ok: true }>(`/api/projects/${id}/activate`, undefined, opts),
+      apiPost<void>(`/api/projects/${id}/activate`, undefined, opts),
   },
 
   chat: {
     list: (opts?: RequestOptions) => apiGet<ChatListResponse>('/api/chat', opts),
     sessions: (opts?: RequestOptions) => apiGet<ChatListResponse>('/api/chat/sessions', opts),
     send: (message: string, opts?: RequestOptions) =>
-      apiPost<{ ok: true; message?: unknown }>('/api/chat', { message }, opts),
-    regenerate: (opts?: RequestOptions) => apiPost<{ ok: true }>('/api/chat/regenerate', undefined, opts),
+      apiPost<{ id: string; file: string; mtime: number; size: number }>(
+        '/api/chat',
+        { message },
+        opts,
+      ),
+    regenerate: (opts?: RequestOptions) => apiPost<void>('/api/chat/regenerate', undefined, opts),
   },
 
   agents: {
@@ -283,24 +287,24 @@ export const api = {
     output: (id: string, opts?: RequestOptions) =>
       apiGet<string>(`/api/background/${id}/output`, opts),
     pause: (id: string, opts?: RequestOptions) =>
-      apiPost<{ ok: true }>(`/api/background/${id}/pause`, undefined, opts),
+      apiPost<void>(`/api/background/${id}/pause`, undefined, opts),
     resume: (id: string, opts?: RequestOptions) =>
-      apiPost<{ ok: true }>(`/api/background/${id}/resume`, undefined, opts),
+      apiPost<void>(`/api/background/${id}/resume`, undefined, opts),
     steer: (id: string, message: string, opts?: RequestOptions) =>
-      apiPost<{ ok: true }>(`/api/background/${id}/steer`, { message }, opts),
+      apiPost<void>(`/api/background/${id}/steer`, { message }, opts),
     kill: (id: string, opts?: RequestOptions) =>
-      apiPost<{ ok: true }>(`/api/background/${id}/kill`, undefined, opts),
+      apiPost<void>(`/api/background/${id}/kill`, undefined, opts),
   },
 
   notifications: {
     list: (opts?: RequestOptions) => apiGet<NotificationListResponse>('/api/notifications', opts),
     unread: (opts?: RequestOptions) => apiGet<NotificationListResponse>('/api/notifications?unread=true', opts),
     markRead: (id: string, opts?: RequestOptions) =>
-      apiPost<{ ok: true }>(`/api/notifications/${id}/read`, undefined, opts),
+      apiPost<void>(`/api/notifications/${id}/read`, undefined, opts),
     markAllRead: (opts?: RequestOptions) =>
       apiPost<{ ok: true; marked: number }>('/api/notifications/read-all', undefined, opts),
     dismiss: (id: string, opts?: RequestOptions) =>
-      apiDelete<{ ok: true }>(`/api/notifications/${id}`, opts),
+      apiDelete<void>(`/api/notifications/${id}`, opts),
   },
 
   artifacts: {

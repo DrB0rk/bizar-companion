@@ -10,24 +10,15 @@ import {
   setPairing,
   apiGet,
   apiPost,
+  apiDelete,
   onUnauthorized,
   onNetworkChange,
   ApiError,
   getNetworkState,
 } from '../client';
+import { mockResponse, mockStatus } from './__helpers__/mockResponse.js';
 
-const mockResponse = (status: number, body?: unknown): Response => {
-  const headers = new Headers();
-  headers.set('content-type', 'application/json');
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: `HTTP ${status}`,
-    headers,
-    json: async () => body ?? {},
-    text: async () => JSON.stringify(body ?? {}),
-  } as Response;
-};
+
 
 describe('api/client', () => {
   beforeEach(() => {
@@ -162,6 +153,16 @@ describe('api/client', () => {
     await expect(apiGet('/api/test')).rejects.toThrow(/Not paired/);
     // Restore for other tests
     setPairing('https://example.test', 'secret-token');
+  });
+
+
+  it('returns undefined for 204 endpoints with void type', async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockResponse(204),
+    );
+    // Use apiDelete with void return type
+    const r = await apiDelete<void>('/api/test');
+    expect(r).toBeUndefined();
   });
 
   it('ApiError has correct fields', () => {

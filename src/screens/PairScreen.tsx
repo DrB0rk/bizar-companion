@@ -19,7 +19,6 @@ import { usePairing } from '../store/pairing';
 import { api } from '../api/client';
 import { useTheme } from '../theme/colors';
 import { Button } from '../components/Button';
-import type { PairVerifyResponse } from '../api/types';
 
 type RootStackParamList = {
   Pair: undefined;
@@ -62,8 +61,8 @@ export default function PairScreen() {
       serverUrl = url.searchParams.get('url');
       token = url.searchParams.get('token');
       if (!serverUrl || !token) throw new Error('QR is missing url or token');
-    } catch (err: any) {
-      Alert.alert('Invalid QR code', err?.message || 'Could not parse code');
+    } catch (err: unknown) {
+      Alert.alert('Invalid QR code', (err instanceof Error ? err.message : String(err)) || 'Could not parse code');
       setScanned(false);
       return;
     }
