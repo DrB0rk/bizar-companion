@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { usePairing } from '../store/pairing';
+import { api } from '../api/client';
 import { useTheme } from '../theme/colors';
 import { Button } from '../components/Button';
 import type { PairVerifyResponse } from '../api/types';
@@ -69,23 +70,16 @@ export default function PairScreen() {
 
     setVerifying(true);
     try {
-      const verifyUrl = `${serverUrl.replace(/\/$/, '')}/api/pair/verify`;
-      const r = await fetch(verifyUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!r.ok) {
-        const text = await r.text().catch(() => '');
-        throw new Error(text || `Server returned ${r.status}`);
-      }
-      const data = (await r.json()) as PairVerifyResponse;
+      const data = await api.pairVerify(serverUrl, token);
       if (!data.valid) throw new Error('Pair token is not valid');
 
       // Discard the pair token — we only need the URL.
       // Secret will be collected on the next screen.
       await pairUrl(serverUrl!);
       navigation.navigate('SecretEntry', { url: serverUrl! });
-    } catch (err: any) {
-      Alert.alert('Pairing failed', err?.message || 'Could not verify token');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not verify token';
+      Alert.alert('Pairing failed', msg);
       setScanned(false);
     } finally {
       setVerifying(false);

@@ -4,13 +4,27 @@ Android app for the Bizar dashboard.
 
 ## Status
 
-**v1.1.0-beta.1** — beta. Requires Bizar dashboard **5.3.0 or later** (enforced at startup via `expo.extra.bizar.minSupportedDashboardVersion`).
+**v1.2.0-beta.1** — beta. Requires Bizar dashboard **5.6.0 or later** (enforced at startup via `expo.extra.bizar.minSupportedDashboardVersion`).
 
 ## What it does
 
 - Pair the app with a dashboard via QR code or manual URL entry.
 - Paste the dashboard secret once; it's stored in `expo-secure-store` on the device.
-- Live **Activity**, **Chat**, **Tasks**, **Settings**, and **More** tabs, with WebSocket-backed updates over the dashboard's `/ws` endpoint.
+- Live **Activity**, **Chat**, **Tasks**, **Agents** (background), **Alerts** (notifications), **Settings**, and **More** tabs.
+- WebSocket-backed updates over the dashboard's `/ws` endpoint.
+- Auto-reconnect with exponential backoff (capped at 30s).
+
+## Tab overview
+
+| Tab          | What it shows                                                   |
+|--------------|-----------------------------------------------------------------|
+| **Activity** | Dashboard activity stream (paginated, colour-coded by category)  |
+| **Chat**     | Streaming chat with the active agent                            |
+| **Tasks**    | All tasks grouped by status, project switcher                   |
+| **Agents**   | Background-agent viewer — list, detail, pause/resume/steer/kill |
+| **Alerts**   | Notifications — mark read, dismiss, mark-all-read              |
+| **Settings** | Pairing info, connection diagnostics, dashboard version         |
+| **More**     | Build info, link-outs to dashboard docs                         |
 
 ## Setup
 
@@ -24,8 +38,8 @@ npx expo start --android   # dev
 Local `gradle` builds are **not supported on this machine** (no Android SDK / JDK 17 / `eas` available). The recommended path is the GitHub Actions release workflow — push a tag and the APK is built and released:
 
 ```bash
-git tag v1.1.0-beta.1
-git push origin v1.1.0-beta.1
+git tag v1.2.0-beta.1
+git push origin v1.2.0-beta.1
 ```
 
 For local builds on a machine that has the Android SDK + JDK 17 installed:
@@ -39,64 +53,78 @@ The release workflow in `.github/workflows/release.yml` injects `android:usesCle
 
 ## Pair with dashboard
 
-1. Start the Bizar dashboard (any way — `bizar` CLI, `bizar-dash`, etc.).
-2. Open dashboard → **Settings** → **API** → **Reveal token** → copy the secret.
-3. Open the companion app and choose one of:
-   - **Scan QR**: tap **Pair Device** on the dashboard, scan the QR with the companion camera, then paste the dashboard secret on the next screen.
-   - **Manual**: tap the **Manual** tab, paste the dashboard URL, then paste the dashboard secret.
-4. The token is stored in `expo-secure-store`. To reconnect to a different dashboard, unpair from **Settings** and repeat.
+1. Open the app. Allow camera permission.
+2. Scan the QR code shown under **Dashboard → Settings → Pair Device**.
+3. (Optional) Switch to **Manual** to paste the dashboard URL.
+4. On the next screen, paste the dashboard secret from **Dashboard → Settings → API**.
+5. The app stores `{url, secret, deviceName, pairedAt, dashboardVersion}` in `expo-secure-store` and starts streaming live updates.
 
-See `DASHBOARD_CHANGES.md` for the long-term fix: a `/api/pair/exchange` endpoint on the dashboard that mints a scoped companion credential and avoids storing the operator's master secret on the device.
+## API surface (v1.2.0)
+
+The app uses a typed `api.*` namespace defined in `src/api/client.ts`:
+
+```ts
+import { api } from '../api/client';
+
+api.overview();                              // GET /api/overview
+api.tasks.list();                            // GET /api/tasks
+api.tasks.start('t1');                       // POST /api/tasks/t1/start
+api.tasks.setStatus('t1', 'doing');          // PATCH /api/tasks/t1/status
+api.projects.activate('p1');                 // POST /api/projects/p1/activate
+api.chat.list();                             // GET /api/chat
+api.chat.send('hello');                      // POST /api/chat
+api.agents.list();                           // GET /api/agents
+api.background.list();                       // GET /api/background
+api.background.pause('bg1');                 // POST /api/background/bg1/pause
+api.background.steer('bg1', 'message');      // POST /api/background/bg1/steer
+api.notifications.list();                    // GET /api/notifications
+api.notifications.markRead('n1');            // POST /api/notifications/n1/read
+api.notifications.markAllRead();             // POST /api/notifications/read-all
+api.artifacts.list();                        // GET /api/artifacts
+api.voice.list();                            // GET /api/voice/list
+api.memory.status();                         // GET /api/memory/status
+api.memory.search('query');                  // GET /api/memory/search?q=...
+api.activity.list();                         // GET /api/activity
+```
+
+All helpers accept an optional `RequestOptions` arg for retries, abort signals, and 404 handling:
+
+```ts
+apiGet('/api/foo', { retries: 2, signal: ctrl.signal, allowNotFound: true });
+```
+
+## Tests
+
+```bash
+npm test             # vitest run
+npm run test:watch   # vitest (watch mode)
+npm run typecheck    # tsc --noEmit
+```
+
+Tests cover:
+- HTTP client: retries, 401 handling, network state
+- WebSocket singleton: state transitions, reconnect logic
+- API namespace: verb + path correctness
 
 ## Architecture
 
 ```
-App.tsx
-└── SafeAreaProvider
-    └── ThemeProvider
-        └── PairingProvider (SecureStore: {url, secret, pairedAt})
-            └── RootNav (Stack: Pair | SecretEntry | Main)
-                └── MainTabs (Bottom Tabs)
-                    ├── ActivityScreen  ← REST /api/activity + WS
-                    ├── ChatScreen      ← REST /api/chat + WS (chat:*)
-                    ├── TasksScreen     ← REST /api/tasks + WS (tasks:*)
-                    ├── SettingsScreen  ← /api/auth/status + /api/chat/sessions
-                    └── MoreScreen
+src/
+├── App.tsx                 # Top-level provider stack
+├── api/
+│   ├── client.ts          # HTTP client + typed api.* namespace
+│   ├── ws.ts              # WebSocket singleton
+│   ├── types.ts           # Shared API response types
+│   └── __tests__/         # vitest tests
+├── components/            # Reusable UI (Card, Button, TaskCard)
+├── hooks/                 # React hooks (useWsEvent, useWsSnapshot)
+├── navigation/            # RootNav, tab + stack navigators
+├── screens/               # One file per screen
+├── store/                 # PairingProvider context
+└── theme/                 # Dark-theme colors
 ```
 
-- **PairingProvider** stores `{url, secret, pairedAt}` (not a pair token — that's a one-time verify credential only).
-- **api/client.ts** — `apiGet / apiPost / apiPut / apiPatch / apiDelete` add the Bearer header automatically. On 401, fires an `onUnauthorized` callback that opens the re-pair modal.
-- **api/ws.ts** — singleton WebSocket to `/ws?token=<secret>`. Exposes `subscribe()` and `getSnapshot()`. Reconnects on close with exponential backoff (capped at 30 s).
-- **hooks/useWsEvent / useWsSnapshot** — typed event subscriptions and snapshot hydration.
+## Changelog
 
-## Auth model
-
-The companion uses the dashboard's long-lived secret as a Bearer token. Pair tokens (returned by `POST /api/pair/start`) are used **only** to verify the QR scan — they are then discarded. Storing the dashboard secret directly is intentional: it is the simplest workable model against the dashboard's current auth surface.
-
-This is a workaround, not the recommended design. The dashboard should expose `/api/pair/exchange` (see `DASHBOARD_CHANGES.md`) which mints a scoped, 30-day companion credential that cannot reveal or rotate the operator's master secret. When that endpoint lands, the companion will switch to it automatically.
-
-## Release process
-
-1. Update version in `app.json` (`expo.version` AND `expo.android.versionCode` — bump `versionCode` on every release, even pre-releases).
-2. Commit to `main`.
-3. Tag and push: `git tag v1.1.0-beta.1 && git push origin v1.1.0-beta.1`.
-4. The `release.yml` workflow builds the APK and creates a GitHub pre-release with the APK attached.
-
-For local iteration without tagging, run the `release.yml` workflow manually via **Run workflow** in the Actions tab.
-
-## Known limitations (v1.1.0-beta.1)
-
-- **Debug APK only** — not signed for Play Store distribution. Manual install (sideload) required.
-- **Single project view in Tasks** — server-side scoping by the active project; no in-app project picker yet.
-- **Chat agent defaults to `odin`** (dashboard default); no agent picker yet.
-- **QR scanner only** — no other barcode types.
-- **Cleartext HTTP allowed** (`usesCleartextTraffic="true"` is injected by the release workflow after prebuild). Required for LAN / Tailscale deployments where the dashboard URL is `http://`.
-- **`eas.json` is a placeholder** — no EAS account is bound, so v1.1.0-beta.1 ships via the GitHub Actions `gradle assembleDebug` path only. EAS Build can be enabled later by adding credentials.
-
-## Type-check
-
-```bash
-npm run typecheck
-```
-
-CI runs this on every push and PR to `main` (`.github/workflows/ci.yml`). The release workflow does not run typecheck — it assumes `main` is green.
+- **v1.2.0-beta.1** (this version) — Notifications + Background agents tabs, typed API namespace, retry/abort/network-state plumbing, 31 unit tests
+- **v1.1.0-beta.1** — Initial beta with Activity, Chat, Tasks, Settings

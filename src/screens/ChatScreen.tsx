@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/colors';
 import { usePairing } from '../store/pairing';
-import { apiGet, apiPost } from '../api/client';
+import { api } from '../api/client';
 import { useWsEvent } from '../hooks/useWsEvent';
 import type { ChatMessage, ChatListResponse, ChatSession } from '../api/types';
 
@@ -37,7 +37,7 @@ export default function ChatScreen() {
     if (!isPaired) return;
     try {
       setError(null);
-      const data = await apiGet<ChatListResponse>('/api/chat?limit=50');
+      const data = await api.chat.list();
       setMessages((data.messages ?? []).slice(-MAX_MESSAGES));
       setSessions(data.sessions ?? []);
     } catch (err: any) {
@@ -98,7 +98,7 @@ export default function ChatScreen() {
     setMessages((prev) => [...prev, { id: tempId, role: 'user', content: text }].slice(-MAX_MESSAGES));
 
     try {
-      await apiPost('/api/chat', { message: text });
+      await api.chat.send(text);
       // Let WS deltas drive the assistant response; reload after a short window
     } catch (err: any) {
       setError(err?.message || 'Send failed');

@@ -1,6 +1,21 @@
 /**
  * Shared API response types for the Bizar Companion app.
- * These mirror the dashboard's REST surface.
+ *
+ * v1.2.0-beta.1 — mirrors the dashboard v5.6.0 REST + WebSocket surface.
+ * Types are kept in sync with:
+ *   - BizarHarness/bizar-dash/src/server/routes/*.mjs
+ *   - BizarHarness/bizar-dash/src/server/api.mjs (WebSocket broadcaster)
+ *
+ * New in v1.2.0:
+ *   - Notification types (per-user notification stream)
+ *   - BackgroundAgent types (bg-spawn / bg-status / bg-collect)
+ *   - Artifact types (artifact browser)
+ *   - VoiceNote types (voice upload / transcribe / list)
+ *   - MemoryNote types (memory vault read/search)
+ *   - Plan types (plan canvas summary)
+ *
+ * The dashboard minimum is 5.6.0 — enforced at startup via
+ * expo.extra.bizar.minSupportedDashboardVersion.
  */
 
 // ---------------------------------------------------------------------------
@@ -59,6 +74,11 @@ export type ActivityKind =
   | 'chat.regenerate'
   | 'chat.response'
   | 'task.delegated'
+  | 'task.completed'
+  | 'task.failed'
+  | 'task.started'
+  | 'agent.status'
+  | 'notification.new'
   | string;
 
 export type Activity = {
@@ -190,6 +210,185 @@ export type Plan = {
 };
 
 // ---------------------------------------------------------------------------
+// Notifications — v1.2.0 NEW
+// ---------------------------------------------------------------------------
+
+export type NotificationKind =
+  | 'task.completed'
+  | 'task.failed'
+  | 'agent.stuck'
+  | 'agent.error'
+  | 'chat.response'
+  | 'chat.delta'
+  | 'plan.feedback'
+  | string;
+
+export type Notification = {
+  id: string;
+  ts: number; // unix ms
+  kind: NotificationKind;
+  message: string;
+  source?: string;
+  read?: boolean;
+  taskId?: string;
+  sessionId?: string;
+  agent?: string;
+  meta?: Record<string, unknown>;
+};
+
+export type NotificationListResponse = {
+  notifications: Notification[];
+  stats: {
+    total: number;
+    unread: number;
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Background agents — v1.2.0 NEW
+// ---------------------------------------------------------------------------
+
+export type BgStatus = 'pending' | 'running' | 'done' | 'failed' | 'killed' | 'timed_out';
+
+export type BackgroundAgent = {
+  id: string;
+  agent: string;
+  status: BgStatus;
+  startedAt: number;
+  completedAt?: number;
+  toolCallCount: number;
+  promptPreview: string;
+  resultPreview?: string;
+  error?: string;
+  parentAgent?: string;
+  parentInstanceId?: string;
+  taskId?: string;
+  durationMs?: number;
+};
+
+export type BackgroundListResponse = {
+  instances: BackgroundAgent[];
+};
+
+export type BackgroundDetailResponse = BackgroundAgent & {
+  output?: string;
+  toolCalls?: Array<{
+    ts: number;
+    name: string;
+    args?: unknown;
+    result?: unknown;
+    durationMs?: number;
+  }>;
+};
+
+// ---------------------------------------------------------------------------
+// Artifacts — v1.2.0 NEW
+// ---------------------------------------------------------------------------
+
+export type ArtifactKind = 'plan' | 'doc' | 'code' | 'canvas' | 'report' | string;
+
+export type Artifact = {
+  id: string;
+  slug: string;
+  title?: string;
+  kind: ArtifactKind;
+  status?: string;
+  size?: number;
+  mtime: number;
+  url?: string;
+  renderUrl?: string;
+  canvasUrl?: string;
+  elementCount?: number;
+  commentCount?: number;
+};
+
+export type ArtifactListResponse = {
+  artifacts: Artifact[];
+};
+
+// ---------------------------------------------------------------------------
+// Voice — v1.2.0 NEW
+// ---------------------------------------------------------------------------
+
+export type VoiceNote = {
+  id: string;
+  ts: number;
+  durationMs: number;
+  size: number;
+  transcript?: string;
+  transcriptStatus: 'pending' | 'processing' | 'done' | 'failed';
+  agent?: string;
+  meta?: Record<string, unknown>;
+};
+
+export type VoiceListResponse = {
+  notes: VoiceNote[];
+};
+
+export type VoiceUploadResponse = {
+  id: string;
+  ok: true;
+};
+
+// ---------------------------------------------------------------------------
+// Memory — v1.2.0 NEW
+// ---------------------------------------------------------------------------
+
+export type MemoryStatus = {
+  mode: 'local' | 'git' | 'remote' | 'lightrag' | string;
+  vault?: string;
+  configured: boolean;
+  notes?: number;
+  vaultPath?: string;
+};
+
+export type MemoryNote = {
+  id: string;
+  path: string;
+  title?: string;
+  tags?: string[];
+  preview?: string;
+  mtime: number;
+  size?: number;
+};
+
+export type MemoryListResponse = {
+  notes: MemoryNote[];
+};
+
+export type MemorySearchResult = {
+  path: string;
+  snippet: string;
+  score: number;
+  title?: string;
+};
+
+export type MemorySearchResponse = {
+  results: MemorySearchResult[];
+  query: string;
+  total: number;
+};
+
+// ---------------------------------------------------------------------------
+// Overview / Dashboard health — v1.2.0 NEW
+// ---------------------------------------------------------------------------
+
+export type Overview = {
+  agentName: string;
+  agentVersion: string;
+  dashboardVersion: string;
+  nodeVersion: string;
+  platform: string;
+  uptime: number;
+  activeProject?: string | null;
+  pendingTasks?: number;
+  runningAgents?: number;
+  stuckAgents?: number;
+  notifications?: { total: number; unread: number };
+  background?: { total: number; running: number };
+};
+
+// ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
 
@@ -243,6 +442,9 @@ export type WsEvent =
   | { type: 'tasks:change'; data: { task: Task } }
   | { type: 'tasks:delete'; data: { id: string } }
   | { type: 'task:progress'; data: { id: string; progress: number; step?: string } }
+  | { type: 'task:started'; data: { id: string; agent?: string } }
+  | { type: 'task:completed'; data: { id: string; resultPreview?: string } }
+  | { type: 'task:failed'; data: { id: string; error: string } }
   | { type: 'agents:change'; data: { agents: Agent[] } }
   | { type: 'agent:status'; data: { name: string; status: AgentStatus } }
   | { type: 'agent:restarted'; data: { name: string } }
@@ -254,6 +456,9 @@ export type WsEvent =
   | { type: 'chat:regenerate'; data: { sessionId: string } }
   | { type: 'pair:change'; data: Record<string, unknown> }
   | { type: 'notification:new'; data: { id: string; message: string; kind?: string } }
+  | { type: 'notifications:change'; data: Record<string, unknown> }
+  | { type: 'background:change'; data: { instance: BackgroundAgent } }
+  | { type: 'background:status'; data: { id: string; status: BgStatus; resultPreview?: string; error?: string } }
   | { type: 'artifact:new'; data: { id: string; name: string; url: string } }
   | { type: 'settings:change'; data: { settings: Partial<WsSnapshotSettings> } }
   | { type: 'change'; data: Record<string, unknown> }

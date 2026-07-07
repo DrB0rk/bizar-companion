@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { usePairing } from '../store/pairing';
-import { apiGet } from '../api/client';
+import { api } from '../api/client';
 import { useTheme } from '../theme/colors';
 import { Button } from '../components/Button';
 import type { AuthStatus, ChatListResponse } from '../api/types';
@@ -49,10 +49,10 @@ export default function SecretEntryScreen() {
       // Step 1: Confirm URL is reachable (unauthenticated endpoint)
       let reachable = false;
       try {
-        const statusRes = await fetch(`${url.replace(/\/$/, '')}/api/auth/status`);
-        reachable = statusRes.ok;
+        await api.authStatus({ allowNotFound: true });
+        reachable = true;
       } catch {
-        // network error
+        // network error or unreachable
       }
       if (!reachable) {
         setError('Cannot reach the dashboard at this URL. Check the URL and your connection.');
@@ -63,12 +63,10 @@ export default function SecretEntryScreen() {
       // Step 2: Confirm the secret works (authenticated endpoint)
       let authValid = false;
       try {
-        const sessionsRes = await fetch(`${url.replace(/\/$/, '')}/api/chat/sessions`, {
-          headers: { Authorization: `Bearer ${secret.trim()}` },
-        });
-        authValid = sessionsRes.ok;
+        await api.chat.sessions();
+        authValid = true;
       } catch {
-        // network error
+        // auth failed
       }
       if (!authValid) {
         setError('The token was rejected. Make sure you pasted the correct secret from Dashboard → Settings → API.');

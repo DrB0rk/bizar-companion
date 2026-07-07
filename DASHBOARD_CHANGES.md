@@ -1,16 +1,27 @@
-# Bizar Dashboard Changes Required for Companion Compatibility
+
+# Bizar Dashboard Changes for Companion Compatibility
 
 **Target repo:** `~/Projects/BizarHarness` (the `@polderlabs/bizar` source)
 **Audience:** whoever is touching the BizarHarness server, dashboards, or auth
-**Status:** open — not yet applied. Other agents are working in BizarHarness in parallel; coordinate before landing.
-**Companion version this targets:** v1.1.0-beta.1
-**Minimum dashboard version:** 5.3.0+
+**Status (2026-07-07, v1.2.0-beta.1):** The companion now ships with a
+typed `api.*` namespace that talks to existing dashboard endpoints. The
+**pair-token-as-bearer** change (Critical §1) is still pending in the
+dashboard — until that lands, the companion flow is:
 
-This document describes the contract the Bizar Companion Android app (Expo / React Native, at `~/Projects/bizar-companion`) requires from the Bizar dashboard. The companion rewrite is in progress against v5.3.0 + the uncommitted WIP on `master` (`bizar-dash/src/server/auth.mjs`, `bizar-dash/src/server/routes/users.mjs`, `cli/commands/dash.mjs`, `cli/commands/tailscale.mjs`).
+  1. Scan QR → confirm `GET /api/pair/verify` succeeds.
+  2. Companion saves URL only.
+  3. User pastes the dashboard secret manually (Dashboard → Settings → API).
+  4. Companion uses the secret as Bearer for everything else.
 
-The companion ships in this state assuming the changes below are applied. **Without at least the Critical section, the companion will 401 on every screen except Pair on non-loopback deployments.**
+This is the **DASHBOARD_CHANGES.md** document — the original spec for what
+the dashboard would need to do to allow the QR-only flow (no manual secret
+paste). The companion no longer *requires* it, but adopting §1 (pair token
+→ bearer) would let us drop the manual paste step.
 
----
+**Companion version this targets:** v1.2.0-beta.1
+**Minimum dashboard version:** 5.6.0+ (enforced via `app.json:extra.bizar.minSupportedDashboardVersion`)
+
+
 
 ## TL;DR — the one-line summary
 
@@ -353,3 +364,60 @@ Other agents are currently working in `~/Projects/BizarHarness/`. Before landing
 | `mintToken` primitive | `bizar-dash/src/server/auth.mjs:407-419` |
 | WS broadcast hub | `bizar-dash/src/server/server.mjs:439-445` |
 | Snapshot envelope | `bizar-dash/src/server/server.mjs:886-917` |
+
+---
+
+## Companion v1.2.0 — New Endpoints Used
+
+The companion v1.2.0 uses these additional endpoints that exist in dashboard
+v5.6.0 today (no dashboard changes needed):
+
+| Endpoint                                                    | Source                     |
+|-------------------------------------------------------------|----------------------------|
+| `GET /api/overview`                                         | New — `routes/overview.mjs` |
+| `GET /api/notifications`                                    | Existing — `routes/notifications.mjs` |
+| `POST /api/notifications/:id/read`                         | Existing                   |
+| `POST /api/notifications/read-all`                         | Existing                   |
+| `DELETE /api/notifications/:id`                            | Existing                   |
+| `GET /api/background`                                       | Existing — `routes/background.mjs` |
+| `POST /api/background/:id/pause`                            | Existing                   |
+| `POST /api/background/:id/resume`                           | Existing                   |
+| `POST /api/background/:id/steer`                            | Existing                   |
+| `POST /api/background/:id/kill`                             | New (added in v5.6.0)      |
+| `GET /api/background/:id/output`                            | Existing                   |
+| `GET /api/voice/list`                                       | Existing — `routes/voice.mjs` |
+| `GET /api/voice/:id`                                        | Existing                   |
+| `POST /api/voice/upload`                                    | Existing                   |
+| `GET /api/memory/status`                                    | Existing — `routes/memory.mjs` |
+| `GET /api/memory/notes`                                     | Existing                   |
+| `GET /api/memory/search?q=...`                              | Existing                   |
+| `GET /api/artifacts`                                        | Existing — `routes/artifacts.mjs` |
+| `GET /api/artifacts/:slug`                                  | Existing                   |
+| `GET /api/artifacts/:slug/render`                           | Existing                   |
+
+All 20 endpoints above are exercised by the v1.2.0 screens.
+
+### WebSocket events consumed
+
+| Event                       | Source                       |
+|-----------------------------|------------------------------|
+| `snapshot`                  | Already broadcast            |
+| `tasks:change`              | Already broadcast            |
+| `tasks:delete`              | Already broadcast            |
+| `task:progress`             | Already broadcast            |
+| `task:started`              | New (added v5.6.0)           |
+| `task:completed`            | New (added v5.6.0)           |
+| `task:failed`               | New (added v5.6.0)           |
+| `agents:change`             | Already broadcast            |
+| `agent:status`              | Already broadcast            |
+| `agent:restarted`           | Already broadcast            |
+| `project:change`            | Already broadcast            |
+| `chat:message` / `chat:delta` | Already broadcast          |
+| `chat:error` / `chat:session:create` / `chat:regenerate` | Already |
+| `pair:change`               | Already broadcast            |
+| `notification:new`          | Already broadcast            |
+| `notifications:change`      | New (added v5.6.0)           |
+| `background:change`         | Already broadcast            |
+| `background:status`         | New (added v5.6.0)           |
+| `artifact:new`              | Already broadcast            |
+| `settings:change`           | Already broadcast            |

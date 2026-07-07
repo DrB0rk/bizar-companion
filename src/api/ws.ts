@@ -1,6 +1,11 @@
 /**
  * Singleton WebSocket manager for the Bizar dashboard.
  *
+ * v1.2.0-beta.1 — improved over v1.1.0:
+ *  - ConnectionState listeners so screens can show "reconnecting…" UI
+ *  - Per-event emission of state changes (open, reconnect, close)
+ *  - Reconnect stats exposed (attempt count, last error)
+ *
  * Uses ?token= query param (not Sec-WebSocket-Protocol) because the RN
  * WebSocket polyfill on Android does not reliably forward custom subprotocols
  * as auth headers. TODO: switch to Sec-WebSocket-Protocol once the dashboard
@@ -23,7 +28,49 @@ let _pingTimer: ReturnType<typeof setInterval> | null = null;
 // Snapshot cached from the last 'snapshot' WS event
 let _snapshot: WsSnapshot | null = null;
 
-// subscribers
+// ---------------------------------------------------------------------------
+// Connection state (v1.2.0 NEW)
+// ---------------------------------------------------------------------------
+
+export type WsConnectionState =
+  | 'idle' // never connected
+  | 'connecting' // first attempt in flight
+  | 'connected' // open
+  | 'reconnecting' // disconnected, waiting to retry
+  | 'failed' // gave up (auth, etc.)
+  | 'closed'; // deliberately closed
+
+export type WsState = {
+  connection: WsConnectionState;
+  attempt: number;
+  connectedAt?: number;
+  lastError?: string;
+  lastEventAt?: number;
+};
+
+let _state: WsState = { connection: 'idle', attempt: 0 };
+type StateListener = (s: WsState) => void;
+const _stateListeners = new Set<StateListener>();
+
+function setState(patch: Partial<WsState>): void {
+  _state = { ..._state, ...patch };
+  _stateListeners.forEach((h) => h(_state));
+}
+
+export function getWsState(): WsState {
+  return _state;
+}
+
+export function onWsStateChange(handler: StateListener): () => void {
+  _stateListeners.add(handler);
+  handler(_state); // emit current state immediately
+  return () => _stateListeners.delete(handler);
+}
+
+// ---------------------------------------------------------------------------
+// Subscribers
+// ---------------------------------------------------------------------------
+
 type Handler = (msg: WsEvent) => void;
 const _subscribers = new Set<Handler>();
 
@@ -58,14 +105,17 @@ function open(): void {
   if (!_shouldRun) return;
   clearTimers();
   const wsUrl = getWsUrl();
+  setState({ connection: _retries === 0 ? 'connecting' : 'reconnecting' });
   try {
     _ws = new WebSocket(wsUrl);
-  } catch {
+  } catch (err) {
+    setState({ lastError: err instanceof Error ? err.message : String(err) });
     scheduleReconnect();
     return;
   }
   _ws.onopen = () => {
     _retries = 0;
+    setState({ connection: 'connected', attempt: 0, connectedAt: Date.now(), lastError: undefined });
     startPing();
     _subscribers.forEach((h) => h({ type: 'pong' })); // signal open
   };
@@ -79,16 +129,22 @@ function open(): void {
       if (msg.type === 'pong') {
         _retries = 0;
       }
+      setState({ lastEventAt: Date.now() });
       _subscribers.forEach((h) => h(msg));
     } catch {
       /* ignore parse errors */
     }
   };
-  _ws.onclose = () => {
+  _ws.onclose = (event) => {
     clearTimers();
+    setState({
+      connection: _shouldRun ? 'reconnecting' : 'closed',
+      lastError: event?.code ? `code=${event.code}` : undefined,
+    });
     scheduleReconnect();
   };
-  _ws.onerror = () => {
+  _ws.onerror = (event) => {
+    setState({ lastError: 'socket error' });
     /* errors are followed by close */
   };
 }
@@ -97,6 +153,7 @@ function scheduleReconnect(): void {
   if (!_shouldRun) return;
   const delay = Math.min(30_000, 500 * Math.pow(2, _retries));
   _retries += 1;
+  setState({ attempt: _retries });
   _reconnectTimer = setTimeout(() => open(), delay);
 }
 
@@ -109,6 +166,7 @@ export function wsConnect(url: string, secret: string): void {
   _secret = secret;
   _shouldRun = true;
   _retries = 0;
+  setState({ connection: 'connecting', attempt: 0, lastError: undefined });
   open();
 }
 
@@ -122,6 +180,7 @@ export function wsDisconnect(): void {
   }
   _ws = null;
   _snapshot = null;
+  setState({ connection: 'closed' });
 }
 
 export function wsSubscribe(handler: Handler): () => void {

@@ -12,11 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/colors';
 import { usePairing } from '../store/pairing';
-import { apiGet, apiPost } from '../api/client';
+import { api } from '../api/client';
 import { useWsEvent } from '../hooks/useWsEvent';
 import { useWsSnapshot } from '../hooks/useWsSnapshot';
 import { TaskCard } from '../components/TaskCard';
-import type { Task, Project, ProjectListResponse, TaskStatus } from '../api/types';
+import type { Task, Project, TaskStatus } from '../api/types';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
   doing: 0,
@@ -44,7 +44,7 @@ export default function TasksScreen() {
     if (!isPaired) return;
     try {
       setError(null);
-      const data = await apiGet<Task[] | { tasks?: Task[] }>('/api/tasks');
+      const data = await api.tasks.list();
       const list = Array.isArray(data) ? data : data.tasks ?? [];
       // Sort by status order
       setTasks(list.sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)));
@@ -59,7 +59,7 @@ export default function TasksScreen() {
   const loadProjects = useCallback(async () => {
     if (!isPaired) return;
     try {
-      const data = await apiGet<ProjectListResponse>('/api/projects');
+      const data = await api.projects.list();
       setProjects(data.projects ?? []);
       setActiveProjectId(data.active ?? null);
     } catch {
@@ -119,7 +119,7 @@ export default function TasksScreen() {
     if (projectId === activeProjectId || activating) return;
     setActivating(projectId);
     try {
-      await apiPost(`/api/projects/${projectId}/activate`);
+      await api.projects.activate(projectId);
       setActiveProjectId(projectId);
       await loadTasks();
     } catch (err: any) {

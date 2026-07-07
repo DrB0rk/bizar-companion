@@ -1,32 +1,53 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import * as Application from 'expo-application';
+import { Platform } from 'react-native';
 
 export type PairingData = {
   url: string;
   secret: string;
   pairedAt: string; // ISO timestamp
+  deviceName?: string;
+  dashboardVersion?: string | null;
 };
 
 type PairingContextValue = {
   url: string | null;
   secret: string | null;
   pairedAt: string | null;
+  deviceName: string | null;
+  dashboardVersion: string | null;
   loading: boolean;
   pairUrl: (url: string) => Promise<void>;
   complete: (secret: string) => Promise<void>;
+  setDashboardVersion: (version: string) => Promise<void>;
   clear: () => Promise<void>;
   isPaired: boolean;
   hasUrl: boolean;
 };
 
-const STORAGE_KEY = 'bizar-pairing';
+const STORAGE_KEY = 'bizar-pairing-v2';
 
 const Ctx = createContext<PairingContextValue | null>(null);
+
+async function defaultDeviceName(): Promise<string> {
+  try {
+    if (Platform.OS === 'android') {
+      const name = await Application.getAndroidId();
+      return name ? `android-${name.slice(0, 8)}` : 'android-device';
+    }
+    return Platform.OS === 'ios' ? 'ios-device' : 'unknown-device';
+  } catch {
+    return 'unknown-device';
+  }
+}
 
 export function PairingProvider({ children }: { children: ReactNode }) {
   const [url, setUrl] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [pairedAt, setPairedAt] = useState<string | null>(null);
+  const [deviceName, setDeviceName] = useState<string | null>(null);
+  const [dashboardVersion, setDashboardVersion] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,6 +59,8 @@ export function PairingProvider({ children }: { children: ReactNode }) {
           setUrl(data.url ?? null);
           setSecret(data.secret ?? null);
           setPairedAt(data.pairedAt ?? null);
+          setDeviceName(data.deviceName ?? (await defaultDeviceName()));
+          setDashboardVersion(data.dashboardVersion ?? null);
         }
       } catch (err) {
         console.warn('Failed to load pairing:', err);
@@ -47,13 +70,24 @@ export function PairingProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
+  const persist = async (data: PairingData): Promise<void> => {
+    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(data));
+  };
+
   const pairUrl = async (newUrl: string) => {
     // Partial state — secret not yet set. Persist what we have.
-    const data: PairingData = { url: newUrl, secret: '', pairedAt: '' };
-    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(data));
+    const data: PairingData = {
+      url: newUrl,
+      secret: '',
+      pairedAt: '',
+      deviceName: await defaultDeviceName(),
+    };
+    await persist(data);
     setUrl(newUrl);
     setSecret(null);
     setPairedAt(null);
+    setDeviceName(data.deviceName ?? null);
+    setDashboardVersion(null);
   };
 
   const complete = async (newSecret: string) => {
@@ -62,10 +96,25 @@ export function PairingProvider({ children }: { children: ReactNode }) {
       url,
       secret: newSecret,
       pairedAt: new Date().toISOString(),
+      deviceName: deviceName ?? (await defaultDeviceName()),
+      dashboardVersion,
     };
-    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(data));
+    await persist(data);
     setSecret(newSecret);
     setPairedAt(data.pairedAt);
+  };
+
+  const updateDashboardVersion = async (version: string) => {
+    if (!url || !secret) return;
+    const data: PairingData = {
+      url,
+      secret,
+      pairedAt: pairedAt ?? new Date().toISOString(),
+      deviceName: deviceName ?? (await defaultDeviceName()),
+      dashboardVersion: version,
+    };
+    await persist(data);
+    setDashboardVersion(version);
   };
 
   const clear = async () => {
@@ -73,7 +122,10 @@ export function PairingProvider({ children }: { children: ReactNode }) {
     setUrl(null);
     setSecret(null);
     setPairedAt(null);
+    setDashboardVersion(null);
   };
+
+
 
   return (
     <Ctx.Provider
@@ -81,9 +133,12 @@ export function PairingProvider({ children }: { children: ReactNode }) {
         url,
         secret,
         pairedAt,
+        deviceName,
+        dashboardVersion,
         loading,
         pairUrl,
         complete,
+        setDashboardVersion: updateDashboardVersion,
         clear,
         isPaired: !!(url && secret),
         hasUrl: !!url,
